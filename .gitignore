@@ -1,0 +1,44 @@
+# System Files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Dependencies
+node_modules/
+third_party/
+
+# Production Build
+dist/
+dist-ssr/
+out/
+
+# Env / Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# LaTeX/Output Fallbacks
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# IDEs
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
