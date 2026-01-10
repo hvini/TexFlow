@@ -10,6 +10,7 @@ import RootNode from '../nodes/RootNode';
 import SectionNode from '../nodes/SectionNode';
 import ContentNode from '../nodes/ContentNode';
 import ImageNode from '../nodes/ImageNode';
+import BibNode from '../nodes/BibNode';
 import DeletableEdge from '../nodes/DeletableEdge';
 import { generateLatex } from '../utils/latexGenerator';
 import { pdfTex } from '../utils/PdfTexEngine';
@@ -23,6 +24,7 @@ const nodeTypes = {
   sectionNode: SectionNode,
   contentNode: ContentNode,
   imageNode: ImageNode,
+  bibNode: BibNode,
 };
 
 const edgeTypes = {
@@ -348,6 +350,20 @@ export default function App() {
     });
   };
 
+  const handleAddBib = () => {
+    const existingBib = nodes.find(n => n.type === 'bibNode');
+    if (existingBib) {
+      alert("Only one Bibliography node is allowed per project.");
+      return;
+    }
+    addNode({
+      id: `bib-${Date.now()}`,
+      type: 'bibNode',
+      position: { x: Math.random() * 300 + 100, y: Math.random() * 300 + 300 },
+      data: { style: 'plain', content: '' },
+    });
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -425,6 +441,13 @@ export default function App() {
               <span className="w-2 h-2 bg-amber-400 rounded-full"></span>
               Add Image
             </button>
+            <button
+              onClick={handleAddBib}
+              className="px-4 py-2 bg-slate-600/20 hover:bg-slate-600/40 border border-slate-500/50 rounded text-sm font-semibold transition-all flex items-center gap-2 text-slate-100"
+            >
+              <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+              Add Bib
+            </button>
           </div>
         </div>
       </div>
@@ -434,9 +457,7 @@ export default function App() {
           <div className="flex justify-between items-center px-2">
             <div>
               <h2 className="text-lg font-bold text-gray-100">Preview</h2>
-              <p className="text-xs text-gray-500">
-                {activeTab === 'code' ? 'Generated LaTeX' : 'Compiled PDF'}
-              </p>
+
             </div>
             <div className={`w-2 h-2 rounded-full ${isCompiling ? 'bg-yellow-400' : 'bg-green-500'} animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.8)]`}></div>
           </div>
@@ -482,7 +503,13 @@ export default function App() {
               onClick={() => setActiveTab('pdf')}
               className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${activeTab === 'pdf' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
             >
-              PDF VIEW
+              PDF
+            </button>
+            <button
+              onClick={() => setActiveTab('citations')}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${activeTab === 'citations' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              CITATIONS
             </button>
           </div>
         </div>
@@ -526,6 +553,140 @@ export default function App() {
                   className="w-full h-full border-0"
                   title="PDF Preview"
                 />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'citations' && (
+            <div className="flex-1 p-4 custom-scrollbar overflow-auto flex flex-col gap-4">
+
+              {/* Header / Add Button */}
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Available Citations</h3>
+                {nodes.find(n => n.type === 'bibNode') && (
+                  <button
+                    onClick={() => {
+                      const key = prompt("Paste your BibTeX entry here:");
+                      if (!key) return;
+
+                      const bibNode = nodes.find(n => n.type === 'bibNode');
+                      const newContent = (bibNode.data.content || '') + '\n\n' + key;
+
+                      // Update node via store
+                      const layout = nodes.map(n => n.id === bibNode.id ? { ...n, data: { ...n.data, content: newContent } } : n);
+                      setNodes(layout);
+                    }}
+                    className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/50 rounded text-[10px] font-bold text-emerald-100 transition-colors uppercase"
+                  >
+                    + Add Entry
+                  </button>
+                )}
+              </div>
+
+              {nodes.find(n => n.type === 'bibNode')?.data.content ? (
+                (() => {
+                  const bibNode = nodes.find(n => n.type === 'bibNode');
+                  const content = bibNode.data.content || '';
+                  // Regex to capture key: @type{KEY,
+                  const regex = /@\w+\s*{\s*([^,]+),/g;
+                  const matches = [...content.matchAll(regex)];
+
+                  if (matches.length === 0) return (
+                    <div className="text-gray-500 text-xs italic text-center py-4">
+                      No citation keys found.<br />
+                      <span className="opacity-50">Paste BibTeX using the button above.</span>
+                    </div>
+                  );
+
+                  const handleDeleteEntry = (keyToRemove) => {
+                    if (!confirm(`Delete citation '${keyToRemove}'?`)) return;
+
+                    // 1. Find the start of the entry: @type{key,
+                    // We construct a strictly matching regex for this specific key
+                    // Escape key for regex safety
+                    const escapedKey = keyToRemove.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const entryStartRegex = new RegExp(`@[a-zA-Z]+\\s*{\\s*${escapedKey}\\s*,`, 'i');
+                    const match = content.match(entryStartRegex);
+
+                    if (!match) return;
+
+                    const startIndex = match.index;
+
+                    // 2. Count braces to find end
+                    let braceCount = 0;
+                    let endIndex = -1;
+                    let foundStartBrace = false;
+
+                    for (let i = startIndex; i < content.length; i++) {
+                      if (content[i] === '{') {
+                        braceCount++;
+                        foundStartBrace = true;
+                      } else if (content[i] === '}') {
+                        braceCount--;
+                      }
+
+                      if (foundStartBrace && braceCount === 0) {
+                        endIndex = i + 1; // Include the closing brace
+                        break;
+                      }
+                    }
+
+                    if (endIndex !== -1) {
+                      const newContent = content.slice(0, startIndex) + content.slice(endIndex);
+                      // Clean up extra newlines
+                      const cleanContent = newContent.replace(/\n{3,}/g, '\n\n');
+
+                      const layout = nodes.map(n => n.id === bibNode.id ? { ...n, data: { ...n.data, content: cleanContent } } : n);
+                      setNodes(layout);
+                    } else {
+                      alert("Could not parse entry structure. Please edit manually.");
+                    }
+                  };
+
+                  return (
+                    <div className="flex flex-col gap-2">
+                      {matches.map((match, i) => (
+                        <div key={i} className="flex items-center justify-between bg-gray-900 border border-gray-800 p-2 rounded hover:border-indigo-500/50 transition-colors group">
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-indigo-300 font-mono text-xs truncate" title={match[1]}>
+                              {match[1]}
+                            </span>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`\\cite{${match[1]}}`);
+                              }}
+                              className="text-gray-500 hover:text-white transition-opacity text-xs"
+                              title="Copy \cite{...}"
+                            >
+                              Copy
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEntry(match[1])}
+                              className="text-gray-600 hover:text-red-400 transition-opacity"
+                              title="Remove Citation"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="text-center text-gray-500 mt-10">
+                  <p className="text-sm mb-2">No Bibliography Node found.</p>
+                  <button
+                    onClick={handleAddBib}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded shadow-lg transition-all"
+                  >
+                    Create Bibliography
+                  </button>
+                </div>
               )}
             </div>
           )}

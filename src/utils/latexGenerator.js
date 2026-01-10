@@ -5,8 +5,17 @@ export const generateLatex = (nodes, edges) => {
     let images = [];
     const visited = new Set();
 
+    // Find Bibliography Node
+    const bibNode = nodes.find(n => n.type === 'bibNode');
+
     let latex = `\\documentclass{${root.data.documentClass || 'article'}}\n`;
     latex += `\\usepackage{graphicx}\n`;
+
+    // Inject Bib content if exists
+    if (bibNode && bibNode.data.content) {
+        latex += `\\begin{filecontents*}{references.bib}\n${bibNode.data.content}\n\\end{filecontents*}\n`;
+    }
+
     latex += `\\begin{document}\n\n`;
 
     const getChildren = (parentId) => {
@@ -36,12 +45,6 @@ export const generateLatex = (nodes, edges) => {
                 const align = alignMap[node.data.align] || '\\centering';
                 const floatFlag = node.data.floatFlag || 'h!';
                 const rotation = node.data.rotation || '0';
-                // LaTeX angle is counter-clockwise.
-                // CSS rotate(Xdeg) is clockwise.
-                // With image-orientation: none, the browser now displays the raw image.
-                // The UI rotation is applied clockwise to this raw image.
-                // To match this clockwise UI rotation in LaTeX (which uses counter-clockwise angles),
-                // we need to negate the rotation value.
                 const latexAngle = rotation === '0' ? '0' : `-${rotation}`;
 
                 content += `\\begin{figure}[${floatFlag}]\n  ${align}\n  \\includegraphics[width=${width}\\textwidth, angle=${latexAngle}, origin=c]{${imgName}}\n\\end{figure}\n\n`;
@@ -66,6 +69,12 @@ export const generateLatex = (nodes, edges) => {
         latex += 'Hello World (Fallback Content)\n';
     } else {
         latex += bodyContent;
+    }
+
+    // Append Bibliography
+    if (bibNode) {
+        latex += `\n\\bibliographystyle{${bibNode.data.style || 'plain'}}\n`;
+        latex += `\\bibliography{references}\n`;
     }
 
     latex += `\\end{document}`;

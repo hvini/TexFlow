@@ -67,37 +67,68 @@ def compile_tex():
             except Exception as e:
                 logger.warning(f"Failed to process image {img_name}: {str(e)}")
 
-        # Run pdflatex
+        # Helper to run command
+        def run_command(cmd, timeout_val):
+            return subprocess.run(
+                cmd,
+                cwd=work_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout_val
+            )
+
+        # 1. First Pass (pdflatex)
         # -interaction=nonstopmode prevents hanging on errors
-        # -halt-on-error stops on the first error
-        command = ['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex']
-        
-        # Run twice for references/toc if needed, but once is usually enough for simple snippets.
-        # For a full editor, running twice is safer but slower. Let's run once for now.
-        process = subprocess.run(
-            command,
-            cwd=work_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=timeout
-        )
+        process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], timeout)
+
+        # Check for BibTeX requirement
+        aux_path = os.path.join(work_dir, 'main.aux')
+        needs_bibtex = False
+        if os.path.exists(aux_path):
+            try:
+                with open(aux_path, 'r', errors='ignore') as f:
+                    content = f.read()
+                    if r'\bibdata' in content:
+                        needs_bibtex = True
+            except:
+                pass
+
+        if needs_bibtex and process.returncode == 0:
+            logger.info("BibTeX trigger detected. Running bibtex...")
+            # 2. Run BibTeX
+            # We don't halt on error for bibtex as it can be noisy but non-fatal
+            bib_process = run_command(['bibtex', 'main'], 30)
+            if bib_process.returncode != 0:
+                logger.error(f"BibTeX failed: {bib_process.stdout.decode('utf-8', errors='ignore')}")
+            else:
+                logger.info("BibTeX ran successfully.")
+            
+            # 3. Second Pass (pdflatex) - Apply bibliography
+            process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], timeout)
+            
+            # 4. Third Pass (pdflatex) - Fix Cross-refs
+            process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], timeout)
+        else:
+             logger.info(f"Skipping BibTeX. Needs BibTeX: {needs_bibtex}, Return Code: {process.returncode}")
 
         if process.returncode != 0:
             # Compilation failed
             stdout = process.stdout.decode('utf-8', errors='ignore')
+            # Try to grab stderr too
+            stderr = process.stderr.decode('utf-8', errors='ignore')
+            full_log = f"{stdout}\n\nErrors:\n{stderr}"
             return jsonify({
                 'error': 'Compilation failed',
-                'logs': stdout
+                'logs': full_log
             }), 400
 
         pdf_path = os.path.join(work_dir, 'main.pdf')
         if os.path.exists(pdf_path):
-            # Read PDF and return appropriate response
-            # We can return file directly or base64. 
-            # Returning file allows the browser to display it easily via blob.
             return send_file(pdf_path, mimetype='application/pdf')
         else:
-            return jsonify({'error': 'PDF not generated despite exit code 0'}), 500
+            # Try to return logs if PDF missing despite success code (rare but possible)
+            stdout = process.stdout.decode('utf-8', errors='ignore')
+            return jsonify({'error': 'PDF not generated', 'logs': stdout}), 500
 
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'Compilation timed out'}), 508
