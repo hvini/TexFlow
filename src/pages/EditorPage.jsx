@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import ReactFlow, { Background, Controls } from 'reactflow';
@@ -14,7 +15,7 @@ import { generateLatex } from '../utils/latexGenerator';
 import { pdfTex } from '../utils/PdfTexEngine';
 import useStore from '../store';
 
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const nodeTypes = {
@@ -38,6 +39,9 @@ const duplicateSelectionSelector = (state) => state.duplicateSelection;
 const deleteSelectionSelector = (state) => state.deleteSelection;
 
 export default function App() {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+
   const nodes = useStore(nodesSelector);
   const edges = useStore(edgesSelector);
   const onNodesChange = useStore(onNodesChangeSelector);
@@ -47,6 +51,10 @@ export default function App() {
   const duplicateSelection = useStore(duplicateSelectionSelector);
   const deleteSelection = useStore(deleteSelectionSelector);
 
+  // Store setters
+  const setNodes = useStore((state) => state.setNodes);
+  const setEdges = useStore((state) => state.setEdges);
+
   const [latexCode, setLatexCode] = useState('');
   const [currentImages, setCurrentImages] = useState([]);
   const [activeTab, setActiveTab] = useState('code');
@@ -54,6 +62,57 @@ export default function App() {
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileError, setCompileError] = useState(null);
   const [userData, setUserData] = useState(null);
+
+  // Project Loading State
+  const [isProjectLoading, setIsProjectLoading] = useState(!!projectId);
+
+  // Load Project Data
+  useEffect(() => {
+    if (!projectId || !auth.currentUser) return;
+
+    const fetchProject = async () => {
+      setIsProjectLoading(true);
+      try {
+        const docRef = doc(db, 'projects', projectId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.nodes) setNodes(data.nodes);
+          if (data.edges) setEdges(data.edges);
+        } else {
+          console.error("Project not found");
+          navigate('/');
+        }
+      } catch (e) {
+        console.error("Error loading project", e);
+      } finally {
+        setIsProjectLoading(false);
+      }
+    };
+
+    fetchProject();
+  }, [projectId, navigate, setNodes, setEdges]);
+
+  // Auto-Save Project Data (Debounced)
+  useEffect(() => {
+    if (!projectId || !auth.currentUser || isProjectLoading) return;
+
+    const saveProject = async () => {
+      try {
+        await updateDoc(doc(db, 'projects', projectId), {
+          nodes: nodes,
+          edges: edges,
+          updatedAt: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("Error auto-saving project", e);
+      }
+    };
+
+    const timeoutId = setTimeout(saveProject, 1000); // Debounce 1s
+    return () => clearTimeout(timeoutId);
+  }, [nodes, edges, projectId, isProjectLoading]);
 
   // Subscription Limits State
   const [limits, setLimits] = useState({
@@ -309,7 +368,18 @@ export default function App() {
         </ReactFlow>
 
         <div className="absolute top-6 left-6 flex flex-col gap-3 bg-gray-800/90 backdrop-blur-md border border-gray-600 p-4 rounded-xl shadow-2xl z-50">
-          <h3 className="text-xs uppercase font-bold text-gray-400 tracking-wider mb-2">Editor Tools</h3>
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={() => navigate('/')}
+              className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
+              title="Back to Dashboard"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <h3 className="text-xs uppercase font-bold text-gray-400 tracking-wider">Editor Tools</h3>
+          </div>
 
           <div className="flex flex-col gap-2 border-b border-gray-700 pb-3 mb-1">
             <button

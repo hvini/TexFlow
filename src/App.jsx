@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import EditorPage from './pages/EditorPage';
+import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -13,6 +14,14 @@ export default function App() {
                 <Route path="/signup" element={<SignUpPage />} />
                 <Route
                     path="/"
+                    element={
+                        <ProtectedRoute>
+                            <DashboardPage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/editor/:projectId"
                     element={
                         <ProtectedRoute>
                             <EditorPage />
