@@ -370,7 +370,7 @@ export default function App() {
         <div className="absolute top-6 left-6 flex flex-col gap-3 bg-gray-800/90 backdrop-blur-md border border-gray-600 p-4 rounded-xl shadow-2xl z-50">
           <div className="flex items-center gap-2 mb-2">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/dashboard')}
               className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
               title="Back to Dashboard"
             >

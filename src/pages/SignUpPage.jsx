@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 
 export default function SignUpPage() {
     const [name, setName] = useState('');
@@ -11,6 +11,12 @@ export default function SignUpPage() {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Get plan from query params
+    const searchParams = new URLSearchParams(location.search);
+    const plan = searchParams.get('plan');
+    const isPremium = plan === 'premium';
 
     const handleSignUp = async (e) => {
         e.preventDefault();
@@ -27,18 +33,27 @@ export default function SignUpPage() {
                 displayName: name
             });
 
+            // Calculate Subscription End (if premium)
+            let subscriptionEnd = null;
+            if (isPremium) {
+                const now = new Date();
+                subscriptionEnd = new Date(now);
+                subscriptionEnd.setDate(now.getDate() + 30);
+            }
+
             // 3. Create User Document in Firestore
             await setDoc(doc(db, 'users', user.uid), {
                 uid: user.uid,
                 name: name,
                 email: email,
                 createdAt: new Date(),
-                tier: 'free',
+                tier: isPremium ? 'premium' : 'free',
+                subscriptionEnd: subscriptionEnd,
                 compileCount: 0,
                 lastReset: new Date()
             });
 
-            navigate('/');
+            navigate('/dashboard');
         } catch (err) {
             console.error(err);
             if (err.code === 'auth/email-already-in-use') {
@@ -56,9 +71,15 @@ export default function SignUpPage() {
     return (
         <div className="flex h-screen w-screen bg-gray-950 items-center justify-center font-sans text-gray-200">
             <div className="w-full max-w-md p-8 bg-gray-900 rounded-xl border border-gray-800 shadow-2xl">
-                <h2 className="text-3xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                <h2 className="text-3xl font-bold mb-2 text-center text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
                     Create Account
                 </h2>
+
+                {isPremium && (
+                    <div className="mb-6 mx-auto w-fit bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse shadow-lg shadow-indigo-500/50">
+                        PREMIUM PLAN SELECTED
+                    </div>
+                )}
 
                 {error && (
                     <div className="mb-4 p-3 bg-red-900/20 border border-red-500/50 text-red-300 rounded text-sm text-center">
