@@ -25,6 +25,10 @@ def compile_tex():
 
     latex_code = data['latex']
     images = data.get('images', [])
+    timeout = data.get('timeout', 30)
+
+    # validate timeout limit (cap at 300s for safety)
+    timeout = min(int(timeout), 300)
 
     # Create a unique temporary directory for this compilation
     compile_id = str(uuid.uuid4())
@@ -75,7 +79,7 @@ def compile_tex():
             cwd=work_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=30  # Timeout in seconds
+            timeout=timeout
         )
 
         if process.returncode != 0:

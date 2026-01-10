@@ -3,7 +3,7 @@ export class PdfTexEngine {
         this.apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080';
     }
 
-    async compile(latexCode, images = []) {
+    async compile(latexCode, images = [], timeout = 30) {
         console.log('Compiling via server:', this.apiUrl);
 
         try {
@@ -14,7 +14,8 @@ export class PdfTexEngine {
                 },
                 body: JSON.stringify({
                     latex: latexCode,
-                    images: images
+                    images: images,
+                    timeout: timeout
                 })
             });
 

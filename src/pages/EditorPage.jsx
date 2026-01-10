@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 import ReactFlow, { Background, Controls } from 'reactflow';
 import 'reactflow/dist/style.css';
 import JSZip from 'jszip';
@@ -11,6 +13,9 @@ import DeletableEdge from '../nodes/DeletableEdge';
 import { generateLatex } from '../utils/latexGenerator';
 import { pdfTex } from '../utils/PdfTexEngine';
 import useStore from '../store';
+
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const nodeTypes = {
   rootNode: RootNode,
@@ -48,6 +53,118 @@ export default function App() {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [isCompiling, setIsCompiling] = useState(false);
   const [compileError, setCompileError] = useState(null);
+  const [userData, setUserData] = useState(null);
+
+  // Subscription Limits State
+  const [limits, setLimits] = useState({
+    freeLimit: 10,
+    freeTimeout: 30,
+    premiumTimeout: 120
+  });
+
+  // Fetch Config
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'config', 'subscription'), (doc) => {
+      if (doc.exists()) {
+        setLimits(doc.data());
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Fetch User Data & Daily Reset Handling
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    // reset logic function
+    const handleDailyReset = async (data) => {
+      if (!data || !data.lastReset) return;
+
+      const now = new Date();
+      const lastReset = data.lastReset?.toDate ? data.lastReset.toDate() : new Date(data.lastReset);
+      const isNewDay = now.getDate() !== lastReset.getDate() || now.getMonth() !== lastReset.getMonth();
+
+      if (isNewDay) {
+        try {
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            compileCount: 0,
+            lastReset: now
+          });
+        } catch (e) {
+          console.error("Failed to reset daily quota", e);
+        }
+      }
+    };
+
+    // Subscription Expiration Check
+    const handleSubscriptionCheck = async (data) => {
+      if (!data || data.tier !== 'premium' || !data.subscriptionEnd) return;
+
+      const now = new Date();
+      const endDate = data.subscriptionEnd?.toDate ? data.subscriptionEnd.toDate() : new Date(data.subscriptionEnd);
+
+      if (now > endDate) {
+        console.log("Subscription expired. Downgrading to free.");
+        try {
+          await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+            tier: 'free',
+            subscriptionEnd: null
+          });
+        } catch (e) {
+          console.error("Failed to downgrade expired subscription", e);
+        }
+      }
+    };
+
+    const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snapshot) => {
+      const data = snapshot.data();
+      setUserData(data);
+      if (data) {
+        handleDailyReset(data);
+        handleSubscriptionCheck(data);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const handleUpgrade = async () => {
+    if (!auth.currentUser) return;
+
+    // Simulate payment success
+    const now = new Date();
+    const nextMonth = new Date(now);
+    nextMonth.setDate(now.getDate() + 30);
+
+    try {
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        tier: 'premium',
+        subscriptionEnd: nextMonth,
+        compileCount: 0 // Optional: reset count on upgrade? Or keep it. Let's keep it but it won't matter for premium.
+      });
+      alert("Upgraded to Premium successfully!");
+    } catch (e) {
+      console.error("Failed to upgrade", e);
+      alert("Failed to upgrade. Please try again.");
+    }
+  };
+
+  const checkAndIncrementQuota = async () => {
+    if (!userData || !auth.currentUser) return false;
+
+    // Use dynamic limit
+    const currentLimit = limits.freeLimit || 10;
+
+    if (userData.tier === 'free' && (userData.compileCount || 0) >= currentLimit) {
+      setCompileError(`Daily compilation limit reached (${currentLimit}). Upgrade to Premium for unlimited access.`);
+      return false;
+    }
+
+    // Increment
+    await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+      compileCount: (userData.compileCount || 0) + 1
+    });
+    return true;
+  };
 
   useEffect(() => {
     const { code, images } = generateLatex(nodes, edges);
@@ -81,8 +198,16 @@ export default function App() {
     setCompileError(null);
     setActiveTab('pdf');
 
+    const canProceed = await checkAndIncrementQuota();
+    if (!canProceed) {
+      setIsCompiling(false);
+      return;
+    }
+
+    const timeout = userData?.tier === 'premium' ? (limits.premiumTimeout || 120) : (limits.freeTimeout || 30);
+
     try {
-      const url = await pdfTex.compile(latexCode, currentImages);
+      const url = await pdfTex.compile(latexCode, currentImages, timeout);
       setPdfUrl(url);
     } catch (err) {
       setCompileError('Failed to compile PDF. Please check your LaTeX syntax or image URLs.');
@@ -149,6 +274,15 @@ export default function App() {
     });
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Navigation is handled by ProtectedRoute or we can force it
+    } catch (error) {
+      console.error("Failed to logout", error);
+    }
+  };
+
   const hasSelection = nodes.some(n => n.selected && n.type !== 'rootNode') || edges.some(e => e.selected);
 
   return (
@@ -200,36 +334,19 @@ export default function App() {
               Add Image
             </button>
           </div>
-
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={duplicateSelection}
-              disabled={!hasSelection}
-              className={`px-4 py-2 rounded text-sm font-bold transition-all flex items-center gap-2 border shadow-lg ${hasSelection
-                ? 'bg-indigo-600/30 border-indigo-500 text-indigo-100 hover:bg-indigo-600/50 hover:shadow-indigo-500/20'
-                : 'bg-gray-700/50 border-gray-600 text-gray-500 cursor-not-allowed'
-                }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-              </svg>
-              Clone Selection
-            </button>
-            <button
-              onClick={deleteSelection}
-              disabled={!hasSelection}
-              className={`px-4 py-2 rounded text-sm font-bold transition-all flex items-center gap-2 border shadow-lg ${hasSelection
-                ? 'bg-rose-600/30 border-rose-500 text-rose-100 hover:bg-rose-600/50 hover:shadow-rose-500/20'
-                : 'bg-gray-700/50 border-gray-600 text-gray-500 cursor-not-allowed'
-                }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              Delete Selection
-            </button>
-          </div>
         </div>
+      </div>
+
+      <div className="absolute top-6 right-[470px] z-50">
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/50 rounded text-sm font-semibold transition-all flex items-center gap-2 text-red-100 backdrop-blur-md shadow-xl"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Logout
+        </button>
       </div>
 
 
@@ -244,6 +361,36 @@ export default function App() {
             </div>
             <div className={`w-2 h-2 rounded-full ${isCompiling ? 'bg-yellow-400' : 'bg-green-500'} animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.8)]`}></div>
           </div>
+
+          {userData && (
+            <div className="px-2 pb-2">
+              <div className="flex justify-between text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1">
+                <span>{userData.tier === 'premium' ? 'Premium' : 'Free Tier'}</span>
+                <span>{userData.tier === 'premium' ? '∞' : `${userData.compileCount || 0}/${limits.freeLimit || 10}`}</span>
+              </div>
+              {userData.tier === 'free' && (
+                <>
+                  <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden mb-2">
+                    <div
+                      className={`h-full ${(userData.compileCount || 0) >= (limits.freeLimit || 10) ? 'bg-red-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(((userData.compileCount || 0) / (limits.freeLimit || 10)) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                  <button
+                    onClick={handleUpgrade}
+                    className="w-full py-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white text-[10px] font-bold uppercase tracking-wider rounded shadow-lg transition-all"
+                  >
+                    Upgrade to Premium
+                  </button>
+                </>
+              )}
+              {userData.tier === 'premium' && userData.subscriptionEnd && (
+                <div className="text-[10px] text-gray-500 text-right">
+                  Exp: {new Date(userData.subscriptionEnd.toDate ? userData.subscriptionEnd.toDate() : userData.subscriptionEnd).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex bg-gray-900 rounded p-1 border border-gray-800">
             <button
@@ -353,6 +500,6 @@ export default function App() {
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 }
