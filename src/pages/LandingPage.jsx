@@ -5,15 +5,7 @@ import { auth } from '../firebase';
 export default function LandingPage() {
     const navigate = useNavigate();
 
-    useEffect(() => {
-        // Redirect if already logged in
-        const unsubscribe = auth.onAuthStateChanged((user) => {
-            if (user) {
-                navigate('/dashboard');
-            }
-        });
-        return () => unsubscribe();
-    }, [navigate]);
+
 
     return (
         <div className="min-h-screen bg-gray-950 text-white font-sans selection:bg-indigo-500/30 overflow-x-hidden">

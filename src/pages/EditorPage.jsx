@@ -66,6 +66,8 @@ export default function App() {
   // Project Loading State
   const [isProjectLoading, setIsProjectLoading] = useState(!!projectId);
 
+  const [projectName, setProjectName] = useState('Untitled Project');
+
   // Load Project Data
   useEffect(() => {
     if (!projectId || !auth.currentUser) return;
@@ -80,6 +82,7 @@ export default function App() {
           const data = docSnap.data();
           if (data.nodes) setNodes(data.nodes);
           if (data.edges) setEdges(data.edges);
+          if (data.name) setProjectName(data.name);
         } else {
           console.error("Project not found");
           navigate('/');
@@ -93,6 +96,18 @@ export default function App() {
 
     fetchProject();
   }, [projectId, navigate, setNodes, setEdges]);
+
+  const handleNameChange = useCallback(async () => {
+    if (!projectId || !projectName.trim()) return;
+    try {
+      await updateDoc(doc(db, 'projects', projectId), {
+        name: projectName,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Failed to update project name", error);
+    }
+  }, [projectId, projectName]);
 
   // Auto-Save Project Data (Debounced)
   useEffect(() => {
@@ -378,7 +393,14 @@ export default function App() {
                 <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </button>
-            <h3 className="text-xs uppercase font-bold text-gray-400 tracking-wider">Editor Tools</h3>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              onBlur={handleNameChange}
+              className="bg-transparent text-white font-bold text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded px-1 w-40 transition-all placeholder-gray-500"
+              placeholder="Project Name"
+            />
           </div>
 
           <div className="flex flex-col gap-2 border-b border-gray-700 pb-3 mb-1">
@@ -406,19 +428,6 @@ export default function App() {
           </div>
         </div>
       </div>
-
-      <div className="absolute top-6 right-[470px] z-50">
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-600/20 hover:bg-red-600/40 border border-red-500/50 rounded text-sm font-semibold transition-all flex items-center gap-2 text-red-100 backdrop-blur-md shadow-xl"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
-      </div>
-
 
       <div className="w-[450px] border-l border-gray-700 bg-gray-950 flex flex-col shadow-2xl z-10 transition-all">
         <div className="p-3 border-b border-gray-800 bg-gray-900/50 flex flex-col gap-3">
