@@ -11,6 +11,11 @@ export const generateLatex = (nodes, edges) => {
     let latex = `\\documentclass{${root.data.documentClass || 'article'}}\n`;
     latex += `\\usepackage{graphicx}\n`;
 
+    // Inject Custom Preamble
+    if (root.data.preamble) {
+        latex += `\n% Custom Preamble\n${root.data.preamble}\n`;
+    }
+
     // Inject Bib content if exists
     if (bibNode && bibNode.data.content) {
         latex += `\\begin{filecontents*}{references.bib}\n${bibNode.data.content}\n\\end{filecontents*}\n`;
@@ -73,7 +78,17 @@ export const generateLatex = (nodes, edges) => {
 
     // Append Bibliography
     if (bibNode) {
-        latex += `\n\\bibliographystyle{${bibNode.data.style || 'plain'}}\n`;
+        let style = bibNode.data.style || 'plain';
+        const docClass = root.data.documentClass || 'article';
+
+        // Override style for specific classes
+        if (docClass === 'IEEEtran') {
+            style = 'IEEEtran';
+        } else if (docClass === 'acmart') {
+            style = 'ACM-Reference-Format';
+        }
+
+        latex += `\n\\bibliographystyle{${style}}\n`;
         latex += `\\bibliography{references}\n`;
     }
 

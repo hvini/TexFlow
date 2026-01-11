@@ -1,22 +1,15 @@
-# Use a lightweight Alpine Linux base
-FROM python:3.9-alpine
+FROM kjarosh/latex:2025.1-medium
 
-# Install minimal TeX Live and required tools
-# 'texlive' is the basic set. Add 'texlive-full' if you are okay paying ~$0.40/month for storage.
+
 RUN apk update && apk add --no-cache \
-    texlive \
-    texlive-xetex \
-    texlive-dvi \
-    ghostscript \
-    # Add other specific packages you need here to keep size low
-    # e.g., texlive-mathscience
-    && pip install flask gunicorn flask-cors
+    python3 \
+    py3-pip \
+    && pip install --no-cache-dir --break-system-packages flask gunicorn flask-cors
 
-# Set up working directory
+RUN tlmgr update --self && tlmgr install acmart ieeetran collection-fontsrecommended libertine newtx totpages environ hyperxmp iftex ifmtarg ncctools trimspaces cmap comment inconsolata
+
 WORKDIR /app
 
-# Copy the server script (see Step 2)
 COPY app.py .
 
-# Run the web server
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "--timeout", "0", "app:app"]

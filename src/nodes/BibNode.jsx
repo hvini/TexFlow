@@ -4,6 +4,16 @@ import useStore from '../store';
 
 const BibNode = ({ id, data }) => {
     const updateNodeData = useStore((state) => state.updateNodeData);
+    const docClass = useStore((state) =>
+        state.nodes.find((n) => n.type === 'rootNode')?.data?.documentClass || 'article'
+    );
+
+    let forcedStyle = null;
+    if (docClass === 'IEEEtran') forcedStyle = 'ieeetran';
+    if (docClass === 'acmart') forcedStyle = 'acm';
+
+    const isLocked = !!forcedStyle;
+    const currentStyle = isLocked ? forcedStyle : (data.style || 'plain');
 
     const handleChange = (field, value) => {
         updateNodeData(id, { [field]: value });
@@ -34,15 +44,27 @@ const BibNode = ({ id, data }) => {
 
             <div className="flex flex-col gap-3">
                 <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-500/70 tracking-tight mb-1 block">Style</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500/70 tracking-tight mb-1 flex justify-between">
+                        <span>Style</span>
+                        {isLocked && (
+                            <span className="text-amber-400 flex items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                </svg>
+                                Locked by Template
+                            </span>
+                        )}
+                    </label>
                     <select
-                        className="nodrag w-full bg-slate-950/50 border border-slate-500/30 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-slate-400 transition-colors cursor-pointer"
-                        value={data.style || 'plain'}
+                        className={`nodrag w-full bg-slate-950/50 border border-slate-500/30 rounded px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-slate-400 transition-colors cursor-pointer ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        value={currentStyle}
                         onChange={(e) => handleChange('style', e.target.value)}
+                        disabled={isLocked}
                     >
                         <option value="plain">Plain ([1])</option>
                         <option value="alpha">Alpha ([Knu66])</option>
                         <option value="acm">ACM</option>
+                        <option value="ieeetran">IEEE</option>
                         <option value="unsrt">Unsorted</option>
                     </select>
                 </div>
@@ -55,11 +77,11 @@ const BibNode = ({ id, data }) => {
                     <textarea
                         className="nodrag w-full h-48 bg-slate-950/50 border border-slate-500/30 rounded px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-slate-400 transition-all resize-y placeholder-slate-700/50"
                         placeholder={`@article{knuth1984,
-  title={Literate programming},
-  author={Knuth, Donald E},
-  journal={The Computer Journal},
-  year={1984}
-}`}
+                            title={Literate programming},
+                            author={Knuth, Donald E},
+                            journal={The Computer Journal},
+                            year={1984}
+                            }`}
                         value={data.content || ''}
                         onChange={(e) => handleChange('content', e.target.value)}
                         spellCheck={false}
