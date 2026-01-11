@@ -49,6 +49,42 @@ const RootNode = ({ id, data }) => {
                     </select>
                 </div>
 
+                {/* Top Matter Inputs */}
+                <div className="space-y-3 pt-2 border-t border-indigo-500/30">
+                    {/* Title */}
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-indigo-300/70 tracking-tight mb-1 block">Title</label>
+                        <input
+                            className="nodrag w-full bg-indigo-950/50 border border-indigo-500/50 rounded px-2 py-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-400"
+                            value={data.title || ''}
+                            onChange={(e) => updateNodeData(id, { title: e.target.value })}
+                            placeholder="My Great Paper"
+                        />
+                    </div>
+
+                    {/* Author */}
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-indigo-300/70 tracking-tight mb-1 block">Author(s)</label>
+                        <input
+                            className="nodrag w-full bg-indigo-950/50 border border-indigo-500/50 rounded px-2 py-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-400"
+                            value={data.author || ''}
+                            onChange={(e) => updateNodeData(id, { author: e.target.value })}
+                            placeholder="A. Gent"
+                        />
+                    </div>
+
+                    {/* Abstract */}
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-indigo-300/70 tracking-tight mb-1 block">Abstract</label>
+                        <textarea
+                            className="nodrag w-full h-20 bg-indigo-950/50 border border-indigo-500/50 rounded px-2 py-1.5 text-xs text-indigo-100 focus:outline-none focus:border-indigo-400 resize-y"
+                            value={data.abstract || ''}
+                            onChange={(e) => updateNodeData(id, { abstract: e.target.value })}
+                            placeholder="Abstract text..."
+                        />
+                    </div>
+                </div>
+
                 {/* Document Class (Editable) */}
                 <div>
                     <label className="text-[10px] uppercase font-bold text-indigo-300/70 tracking-tight mb-1 block">Class</label>

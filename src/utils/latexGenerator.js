@@ -2,6 +2,40 @@ export const generateLatex = (nodes, edges) => {
     const root = nodes.find((n) => n.type === 'rootNode');
     if (!root) return { code: '% No Root Node found\n% Please add a Root Node to start.', images: [] };
 
+    // Security Check
+    const blockList = ['\\write18', '\\immediate', '\\input', '\\include', '\\openout', '\\usepackage{pgf}', '\\usepackage{tikz}'];
+    const checkSecurity = (text) => {
+        if (!text) return;
+        blockList.forEach(cmd => {
+            if (text.includes(cmd)) {
+                throw new Error(`Security violation: Forbidden command "${cmd}" detected.`);
+            }
+        });
+    };
+
+    try {
+        checkSecurity(root.data.title);
+        checkSecurity(root.data.author);
+        checkSecurity(root.data.abstract);
+        checkSecurity(root.data.preamble);
+        nodes.forEach(n => {
+            // Check content (Text, Code, Bib)
+            if (n.data.content) checkSecurity(n.data.content);
+
+            // Check Titles (Sections)
+            if (n.data.title) checkSecurity(n.data.title);
+
+            // Check Image Parameters
+            if (n.type === 'imageNode') {
+                checkSecurity(n.data.width);
+                checkSecurity(n.data.rotation);
+                checkSecurity(n.data.floatFlag);
+            }
+        });
+    } catch (e) {
+        return { code: `% ERROR: ${e.message}\n% Please remove dangerous commands to proceed.`, images: [] };
+    }
+
     let images = [];
     const visited = new Set();
 
@@ -16,12 +50,32 @@ export const generateLatex = (nodes, edges) => {
         latex += `\n% Custom Preamble\n${root.data.preamble}\n`;
     }
 
+    // Top Matter (Title & Author)
+    const title = root.data.title || 'Untitled Document';
+    latex += `\\title{${title}}\n`;
+
+    if (root.data.author) latex += `\\author{${root.data.author}}\n`;
+
     // Inject Bib content if exists
     if (bibNode && bibNode.data.content) {
         latex += `\\begin{filecontents*}{references.bib}\n${bibNode.data.content}\n\\end{filecontents*}\n`;
     }
 
     latex += `\\begin{document}\n\n`;
+
+    // Abstract placement logic
+    const docClass = root.data.documentClass || 'article';
+    const abstractContent = root.data.abstract ? `\\begin{abstract}\n${root.data.abstract}\n\\end{abstract}\n` : '';
+
+    if (docClass === 'acmart') {
+        // ACM: Abstract BEFORE maketitle
+        if (abstractContent) latex += abstractContent;
+        latex += `\\maketitle\n\n`;
+    } else {
+        // Standard/IEEE: Abstract AFTER maketitle
+        latex += `\\maketitle\n\n`;
+        if (abstractContent) latex += abstractContent;
+    }
 
     const getChildren = (parentId) => {
         return edges

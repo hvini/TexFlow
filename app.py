@@ -79,7 +79,7 @@ def compile_tex():
 
         # 1. First Pass (pdflatex)
         # -interaction=nonstopmode prevents hanging on errors
-        process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], timeout)
+        process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', '-no-shell-escape', 'main.tex'], timeout)
 
         # Check for BibTeX requirement
         aux_path = os.path.join(work_dir, 'main.aux')
@@ -104,10 +104,10 @@ def compile_tex():
                 logger.info("BibTeX ran successfully.")
             
             # 3. Second Pass (pdflatex) - Apply bibliography
-            process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], timeout)
+            process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', '-no-shell-escape', 'main.tex'], timeout)
             
             # 4. Third Pass (pdflatex) - Fix Cross-refs
-            process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'main.tex'], timeout)
+            process = run_command(['pdflatex', '-interaction=nonstopmode', '-halt-on-error', '-no-shell-escape', 'main.tex'], timeout)
         else:
              logger.info(f"Skipping BibTeX. Needs BibTeX: {needs_bibtex}, Return Code: {process.returncode}")
 
