@@ -79,6 +79,17 @@ export default function SignUpPage() {
 
     return (
         <div className="flex h-screen w-screen bg-gray-950 items-center justify-center font-sans text-gray-200">
+            {/* Navbar */}
+            <nav className="fixed w-full z-50 top-0 start-0 border-b border-white/5 bg-gray-950/80 backdrop-blur-md">
+                <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between mx-auto p-4">
+                    <Link to="/" className="flex items-center gap-3 rtl:space-x-reverse py-0.5">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                            <span className="font-bold text-lg text-white">T</span>
+                        </div>
+                        <span className="self-center text-xl font-bold whitespace-nowrap tracking-tight text-white">TeXFlow</span>
+                    </Link>
+                </div>
+            </nav>
             <div className="w-full max-w-md p-8 bg-gray-900 rounded-xl border border-gray-800 shadow-2xl">
                 <h2 className="text-3xl font-bold mb-2 text-center text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
                     Create Account
